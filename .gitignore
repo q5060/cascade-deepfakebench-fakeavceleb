@@ -5,3 +5,6 @@
 *.pth
 *.pt
 *.dat
+
+# Ignore all contents under datasets/
+datasets/rgb/*
