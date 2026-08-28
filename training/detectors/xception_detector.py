@@ -62,15 +62,16 @@ class XceptionDetector(AbstractDetector):
         
     def build_backbone(self, config):
         # prepare the backbone
-        backbone_class = BACKBONE[config['backbone_name']]
-        model_config = config['backbone_config']
-        backbone = backbone_class(model_config)
+        backbone_class = BACKBONE[config['backbone_name']]      # 找到 Xception Backbone class
+        model_config = config['backbone_config']                # 找出設定
+        backbone = backbone_class(model_config)                 # 建立 neural network object
         # if donot load the pretrained weights, fail to get good results
         state_dict = torch.load(config['pretrained'])
         for name, weights in state_dict.items():
             if 'pointwise' in name:
                 state_dict[name] = weights.unsqueeze(-1).unsqueeze(-1)
         state_dict = {k:v for k, v in state_dict.items() if 'fc' not in k}
+        # 把剛剛載入的 pretrained weights 放入 backbone 裡面
         backbone.load_state_dict(state_dict, False)
         logger.info('Load pretrained model successfully!')
         return backbone
@@ -110,7 +111,7 @@ class XceptionDetector(AbstractDetector):
         features = self.features(data_dict)
         # get the prediction by classifier
         pred = self.classifier(features)
-        # get the probability of the pred
+        # get the probability of the pred by softmax
         prob = torch.softmax(pred, dim=1)[:, 1]
         # build the prediction dict for each output
         pred_dict = {'cls': pred, 'prob': prob, 'feat': features}

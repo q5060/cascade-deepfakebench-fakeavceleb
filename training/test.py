@@ -57,6 +57,7 @@ def init_seed(config):
 
 
 def prepare_testing_data(config):
+    # 給我一個 dataset 名稱，我幫你建立那個 dataset 的 DataLoader。
     def get_test_data_loader(config, test_name):
         # update the config dictionary with the specific testing dataset
         config = config.copy()  # create a copy of config to avoid altering the original one
@@ -65,6 +66,7 @@ def prepare_testing_data(config):
                 config=config,
                 mode='test', 
             )
+        # 把 test_set 包裝成 DataLoader，這樣就可以用 batch 的方式讀取資料
         test_data_loader = \
             torch.utils.data.DataLoader(
                 dataset=test_set, 
@@ -88,16 +90,20 @@ def choose_metric(config):
         raise NotImplementedError('metric {} is not implemented'.format(metric_scoring))
     return metric_scoring
 
-
+# 控制「這個 dataset 的所有 batch 怎麼測」
 def test_one_dataset(model, data_loader):
-    prediction_lists = []
-    feature_lists = []
-    label_lists = []
+    prediction_lists = []   # fake score
+    feature_lists = []      # feature vector
+    label_lists = []        # ground truth labels
+    # 一個 dataloader 是一個 batch
     for i, data_dict in tqdm(enumerate(data_loader), total=len(data_loader)):
         # get data
         data, label, mask, landmark = \
         data_dict['image'], data_dict['label'], data_dict['mask'], data_dict['landmark']
+
+        # convert label to binary
         label = torch.where(data_dict['label'] != 0, 1, 0)
+
         # move data to GPU
         data_dict['image'], data_dict['label'] = data.to(device), label.to(device)
         if mask is not None:
@@ -106,13 +112,15 @@ def test_one_dataset(model, data_loader):
             data_dict['landmark'] = landmark.to(device)
 
         # model forward without considering gradient computation
+        # inference 結果移併回傳到 predictions dict
         predictions = inference(model, data_dict)
         label_lists += list(data_dict['label'].cpu().detach().numpy())
         prediction_lists += list(predictions['prob'].cpu().detach().numpy())
         feature_lists += list(predictions['feat'].cpu().detach().numpy())
     
     return np.array(prediction_lists), np.array(label_lists),np.array(feature_lists)
-    
+
+# 控制「要測哪些 dataset」
 def test_epoch(model, test_data_loaders):
     # set model to eval mode
     model.eval()
@@ -120,9 +128,10 @@ def test_epoch(model, test_data_loaders):
     # define test recorder
     metrics_all_datasets = {}
 
-    # testing for all test data
+    # get names for all testing datasets
     keys = test_data_loaders.keys()
     for key in keys:
+        # get the data dictionary for the current dataset
         data_dict = test_data_loaders[key].dataset.data_dict
         # compute loss for each dataset
         predictions_nps, label_nps,feat_nps = test_one_dataset(model, test_data_loaders[key])
@@ -139,6 +148,7 @@ def test_epoch(model, test_data_loaders):
 
     return metrics_all_datasets
 
+# 把一個 batch 的 data_dict 丟進 detector，拿回 predictions。
 @torch.no_grad()
 def inference(model, data_dict):
     predictions = model(data_dict, inference=True)
@@ -181,6 +191,7 @@ def main():
             epoch = int(weights_path.split('/')[-1].split('.')[0].split('_')[2])
         except:
             epoch = 0
+        # load the pre-trained weights
         ckpt = torch.load(weights_path, map_location=device)
         model.load_state_dict(ckpt, strict=True)
         print('===> Load checkpoint done!')

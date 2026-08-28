@@ -68,16 +68,18 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         # Dataset dictionary
         self.image_list = []
         self.label_list = []
+        self.video_name_list = []
         
         # Set the dataset dictionary based on the mode
         if mode == 'train':
             dataset_list = config['train_dataset']
             # Training data should be collected together for training
-            image_list, label_list = [], []
+            image_list, label_list, name_list = [], [], []
             for one_data in dataset_list:
                 tmp_image, tmp_label, tmp_name = self.collect_img_and_label_for_one_dataset(one_data)
                 image_list.extend(tmp_image)
                 label_list.extend(tmp_label)
+                name_list.extend(tmp_name)
             if self.lmdb:
                 if len(dataset_list)>1:
                     if all_in_pool(dataset_list,FFpp_pool):
@@ -89,6 +91,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                     lmdb_path = os.path.join(config['lmdb_dir'], f"{dataset_list[0] if dataset_list[0] not in FFpp_pool else 'FaceForensics++'}_lmdb")
                     self.env = lmdb.open(lmdb_path, create=False, subdir=True, readonly=True, lock=False)
         elif mode == 'test':
+            # test 的時候每個 dataset 都要分開測，所以只收集一個 dataset 的資料
             one_data = config['test_dataset']
             # Test dataset should be evaluated separately. So collect only one dataset each time
             image_list, label_list, name_list = self.collect_img_and_label_for_one_dataset(one_data)
@@ -99,13 +102,18 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             raise NotImplementedError('Only train and test modes are supported.')
 
         assert len(image_list)!=0 and len(label_list)!=0, f"Collect nothing for {mode} mode!"
-        self.image_list, self.label_list = image_list, label_list
+        assert len(image_list) == len(label_list) == len(name_list), \
+            'Number of images, labels, and video names are not equal'
+        self.image_list = image_list
+        self.label_list = label_list
+        self.video_name_list = list(name_list)
 
 
-        # Create a dictionary containing the image and label lists
+        # Keep paths, labels, and video identities aligned by dataset index.
         self.data_dict = {
-            'image': self.image_list, 
-            'label': self.label_list, 
+            'image': self.image_list,
+            'label': self.label_list,
+            'video_name': self.video_name_list,
         }
         
         self.transform = self.init_data_aug_method()
@@ -203,9 +211,10 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                 # Get the label and frame paths for the current video
                 if video_info['label'] not in self.config['label_dict']:
                     raise ValueError(f'Label {video_info["label"]} is not found in the configuration file.')
+                # 將 label 轉換為數字
                 label = self.config['label_dict'][video_info['label']]
                 frame_paths = video_info['frames']
-                # sorted video path to the lists
+                # sorted video path to the lists, by numbers
                 if '\\' in frame_paths[0]:
                     frame_paths = sorted(frame_paths, key=lambda x: int(x.split('\\')[-1].split('.')[0]))
                 else:
@@ -226,6 +235,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                         frame_paths = [frame_paths[i] for i in range(0, total_frames, step)][:self.frame_num]
                 
                 # If video-level methods, crop clips from the selected frames if needed
+                # 把 clips 裝到 selected_clips 裡面，然後再把 selected_clips 裝到 frame_path_list 裡面
                 if self.video_level:
                     if self.clip_size is None:
                         raise ValueError('clip_size must be specified when video_level is True.')
@@ -474,6 +484,9 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         image_paths = self.data_dict['image'][index]
         label = self.data_dict['label'][index]
 
+        # 把 sample 統一變成 list，方便後續處理
+        # image-level:一個 sample → [一個 frame path]
+        # video-level:一個 sample → [多個 frame paths]
         if not isinstance(image_paths, list):
             image_paths = [image_paths]  # for the image-level IO, only one frame is used
 
@@ -491,7 +504,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             mask_path = image_path.replace('frames', 'masks')  # Use .png for mask
             landmark_path = image_path.replace('frames', 'landmarks').replace('.png', '.npy')  # Use .npy for landmark
 
-            # Load the image
+            # Load the image to RAM
             try:
                 image = self.load_rgb(image_path)
             except Exception as e:
@@ -517,7 +530,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                 image_trans, landmarks_trans, mask_trans = deepcopy(image), deepcopy(landmarks), deepcopy(mask)
             
 
-            # To tensor and normalize
+            # To tensor and normalize：變成 model 真正吃的 tensor
             if not no_norm:
                 image_trans = self.normalize(self.to_tensor(image_trans))
                 if self.config['with_landmark']:
@@ -569,11 +582,12 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         labels = torch.LongTensor(labels)
         
         # Special case for landmarks and masks if they are None
+        # 如果這個 batch 裡每個 sample 都有 landmark，就 stack 起來；只要有人是 None，整個 batch 的 landmark 就設成 None。
         if not any(landmark is None or (isinstance(landmark, list) and None in landmark) for landmark in landmarks):
             landmarks = torch.stack(landmarks, dim=0)
         else:
             landmarks = None
-
+        # mask 也一樣
         if not any(m is None or (isinstance(m, list) and None in m) for m in masks):
             masks = torch.stack(masks, dim=0)
         else:
@@ -587,6 +601,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         data_dict['mask'] = masks
         return data_dict
 
+    # return sample 數量
     def __len__(self):
         """
         Return the length of the dataset.
@@ -600,7 +615,8 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         Raises:
             AssertionError: If the number of images and labels in the dataset are not equal.
         """
-        assert len(self.image_list) == len(self.label_list), 'Number of images and labels are not equal'
+        assert len(self.image_list) == len(self.label_list) == len(self.video_name_list), \
+            'Number of images, labels, and video names are not equal'
         return len(self.image_list)
 
 

@@ -60,7 +60,7 @@ docker stop cascade-deepfakebench
 ```bash
 python training/test.py \
 --detector_path training/config/detector/xception.yaml \
---test_dataset FaceForensics++ \
+--test_dataset FaceForensics++ Celeb-DF-v2 \
 --weights_path ./training/weights/xception_best.pth
 ```
 

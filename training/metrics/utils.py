@@ -59,8 +59,9 @@ def get_test_metrics(y_pred, y_true, img_names):
                 pred_sum += float(frame[1])
                 label_sum += int(frame[2])
                 leng += 1
-            new_pred.append(pred_sum / leng)
-            new_label.append(int(label_sum / leng))
+            # 計算影片的分數
+            new_pred.append(pred_sum / leng)        # 影片分數 = 影片所有 frame 分數的平均
+            new_label.append(int(label_sum / leng)) # Label
         fpr, tpr, thresholds = metrics.roc_curve(new_label, new_pred)
         v_auc = metrics.auc(fpr, tpr)
         fnr = 1 - tpr
@@ -68,6 +69,7 @@ def get_test_metrics(y_pred, y_true, img_names):
         return v_auc, v_eer
 
 
+    # 把多餘的維度刪掉，例如 [[0.91], [0.87], [0.95]] -> [0.91, 0.87, 0.95]
     y_pred = y_pred.squeeze()
     # For UCF, where labels for different manipulations are not consistent.
     y_true[y_true >= 1] = 1
