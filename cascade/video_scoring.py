@@ -136,3 +136,70 @@ def route_video_scores(video_scores, low_threshold, high_threshold):
             )
         )
     return tuple(routed)
+
+
+def validate_final_threshold(threshold):
+    """Validate the final stage's single real/fake threshold."""
+    threshold = float(threshold)
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError('Final threshold must be within [0, 1].')
+    return threshold
+
+
+def route_final_stage(video_scores, threshold):
+    """Resolve every final-stage video using REAL < threshold, else FAKE."""
+    threshold = validate_final_threshold(threshold)
+    return tuple(
+        RoutedVideo(
+            video_name=video_score.video_name,
+            label=video_score.label,
+            score=video_score.score,
+            frame_count=video_score.frame_count,
+            decision=REAL if video_score.score < threshold else FAKE,
+        )
+        for video_score in video_scores
+    )
+
+
+def merge_cascade_decisions(stage1_routed, stage2_routed):
+    """Replace Stage 1 uncertain decisions with final Stage 2 decisions."""
+    stage1_routed = tuple(stage1_routed)
+    stage2_routed = tuple(stage2_routed)
+    uncertain_names = {
+        video.video_name
+        for video in stage1_routed
+        if video.decision == UNCERTAIN
+    }
+    stage2_by_name = {}
+    for video in stage2_routed:
+        if video.decision == UNCERTAIN:
+            raise ValueError('The final stage cannot return UNCERTAIN.')
+        if video.video_name in stage2_by_name:
+            raise ValueError(
+                'Duplicate Stage 2 video_name: {!r}.'.format(video.video_name)
+            )
+        stage2_by_name[video.video_name] = video
+
+    stage2_names = set(stage2_by_name)
+    if stage2_names != uncertain_names:
+        missing = sorted(uncertain_names.difference(stage2_names))
+        unexpected = sorted(stage2_names.difference(uncertain_names))
+        raise ValueError(
+            'Stage 2 cohort must exactly match Stage 1 uncertain videos. '
+            'Missing: {}; unexpected: {}.'.format(missing, unexpected)
+        )
+
+    final_videos = []
+    for stage1_video in stage1_routed:
+        if stage1_video.decision == UNCERTAIN:
+            stage2_video = stage2_by_name[stage1_video.video_name]
+            if stage1_video.label != stage2_video.label:
+                raise ValueError(
+                    'Ground-truth label changed between stages for {!r}.'.format(
+                        stage1_video.video_name
+                    )
+                )
+            final_videos.append(stage2_video)
+        else:
+            final_videos.append(stage1_video)
+    return tuple(final_videos)

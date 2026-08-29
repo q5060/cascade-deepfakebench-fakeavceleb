@@ -8,6 +8,8 @@ from .video_scoring import (
     RoutedVideo,
     VideoScore,
     VideoScoreAccumulator,
+    merge_cascade_decisions,
+    route_final_stage,
     route_video_scores,
 )
 
@@ -19,5 +21,7 @@ __all__ = [
     'VideoIdentityDataset',
     'VideoScore',
     'VideoScoreAccumulator',
+    'merge_cascade_decisions',
+    'route_final_stage',
     'route_video_scores',
 ]

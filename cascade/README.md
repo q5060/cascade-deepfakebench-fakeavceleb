@@ -36,7 +36,8 @@ Inside the Docker container, run the first stage from the repository mount:
 cd /app
 python cascade/test.py \
   --low_threshold 0.2 \
-  --high_threshold 0.8
+  --high_threshold 0.8 \
+  --final_threshold 0.5
 ```
 
 Replace the example thresholds with the operational values supplied to the
@@ -51,3 +52,20 @@ otherwise                -> UNCERTAIN
 
 Stage 1 AUC is calculated over every FaceForensics++ video. A cohort with fewer
 than two ground-truth classes is reported as `N/A`.
+
+Stage 1 uncertain videos are selected from this same Dataset object, so UCF
+receives the exact same sampled frames. Stage 2 uses a single inclusive fake
+threshold:
+
+```text
+score < final_threshold   -> REAL
+score >= final_threshold  -> FAKE
+```
+
+Stage 2 AUC covers only videos actually processed by UCF. Final ACC, FAR, and
+FRR cover the original full FaceForensics++ test cohort, with fake as class 1:
+
+```text
+FAR = fake videos classified as REAL / all fake videos
+FRR = real videos classified as FAKE / all real videos
+```
