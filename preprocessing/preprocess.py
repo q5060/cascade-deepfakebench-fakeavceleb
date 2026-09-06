@@ -57,6 +57,7 @@ We then additionally obtain "frames", "landmarks", and "mask" directories in sam
 import os
 import sys
 import time
+import argparse
 import cv2
 import dlib
 import yaml
@@ -422,6 +423,11 @@ def preprocess(dataset_path, mask_path, mode, num_frames, stride, logger, use_un
         logger.info(f"Total time taken: {duration_minutes:.2f} minutes")
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Crop faces from a dataset.')
+    parser.add_argument('--dataset_name', type=str, default=None)
+    parser.add_argument('--dataset_root_path', type=str, default=None)
+    args = parser.parse_args()
+
     # from config.yaml load parameters
     yaml_path = './config.yaml'
     # open the yaml file
@@ -432,8 +438,8 @@ if __name__ == '__main__':
         print("YAML file parsing error:", e)
 
     # Get the parameters
-    dataset_name = config['preprocess']['dataset_name']['default']
-    dataset_root_path = config['preprocess']['dataset_root_path']['default']
+    dataset_name = args.dataset_name or config['preprocess']['dataset_name']['default']
+    dataset_root_path = args.dataset_root_path or config['preprocess']['dataset_root_path']['default']
     comp = config['preprocess']['comp']['default']
     mode = config['preprocess']['mode']['default']
     stride = config['preprocess']['stride']['default']

@@ -56,6 +56,7 @@ After running this code, it will generates a json file looks like the below stru
 
 import os
 import glob
+import argparse
 import re
 import cv2
 import json
@@ -532,6 +533,12 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
     print(f"{dataset_name}.json generated successfully.")
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Build a dataset JSON file.')
+    parser.add_argument('--dataset_name', type=str, default=None)
+    parser.add_argument('--dataset_root_path', type=str, default=None)
+    parser.add_argument('--output_file_path', type=str, default=None)
+    args = parser.parse_args()
+
     # from config.yaml load parameters
     yaml_path = './config.yaml'
     # open the yaml file
@@ -541,10 +548,11 @@ if __name__ == '__main__':
     except yaml.parser.ParserError as e:
         print("YAML file parsing error:", e)
 
-    dataset_name = config['rearrange']['dataset_name']['default']
-    dataset_root_path = config['rearrange']['dataset_root_path']['default']
-    output_file_path = config['rearrange']['output_file_path']['default']
+    dataset_name = args.dataset_name or config['rearrange']['dataset_name']['default']
+    dataset_root_path = args.dataset_root_path or config['rearrange']['dataset_root_path']['default']
+    output_file_path = args.output_file_path or config['rearrange']['output_file_path']['default']
     comp = config['rearrange']['comp']['default']
     perturbation = config['rearrange']['perturbation']['default']
+    os.makedirs(output_file_path, exist_ok=True)
     # Call the generate_dataset_file function
     generate_dataset_file(dataset_name, dataset_root_path, output_file_path, comp, perturbation)

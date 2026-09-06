@@ -27,7 +27,6 @@ rearrange:
     default: '/app/datasets/rgb'
   output_file_path: # the json path to the dataset
     type: str
-    # For FakeAVCeleb, set this to '../preprocessing/dataset_json' so training/test.py can find it
     default: '../preprocessing/dataset_json_v6'
   comp: # the compression level of videos, only in the dataset of FaceForensics++.
     choices: ['raw', 'c23', 'c40']
